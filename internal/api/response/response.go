@@ -13,7 +13,7 @@ func NewResponse() *Response {
 
 type BaseResponse struct {
 	Err error `json:"error"`
-	Message any `json:"message"`
+	Data any `json:"message"`
 	Success bool `json:"success"`
 }
 

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/dylan0804/image-processing-tool/internal/api/handlers"
+	"github.com/dylan0804/image-processing-tool/internal/api/middleware"
 	"go.uber.org/zap"
 )
 
@@ -23,8 +24,11 @@ func NewRoutes(mux *http.ServeMux, i *handlers.ImageHandler, logger *zap.Logger)
 
 func (r *Route) InitRoutes() {
 	r.mux.HandleFunc("POST /api/v1/image/upload", r.imageHandler.UploadImage)
+	r.mux.HandleFunc("POST /api/v1/image/resize", r.imageHandler.BlurImage)
+
+	handler := middleware.LoggingMiddleware(r.logger, r.mux)
 
 	r.logger.Info("app running on port :8080")
 
-	http.ListenAndServe(":8080", r.mux)
+	http.ListenAndServe(":8080", handler)
 }
