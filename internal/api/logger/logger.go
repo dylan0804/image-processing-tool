@@ -1,9 +1,15 @@
 package logger
 
 import (
+	"context"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+type loggerKeyType struct {}
+
+var loggerKey = loggerKeyType{}
 
 func InitLogger() (*zap.Logger, error) {
 	logLevel := zap.InfoLevel
@@ -35,4 +41,16 @@ func InitLogger() (*zap.Logger, error) {
 	}
 
 	return logger, nil
+}
+
+func WithLogger(ctx context.Context, logger *zap.Logger) context.Context {
+	return context.WithValue(ctx, loggerKey, logger)
+}
+
+func LoggerFromContext(ctx context.Context) *zap.Logger {
+	if logger, ok := ctx.Value(loggerKey).(*zap.Logger); ok {
+		return logger
+	}	
+
+	return zap.NewNop()
 }
