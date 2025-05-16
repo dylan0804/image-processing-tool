@@ -9,12 +9,18 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type RedisSessionStore struct {
+type RedisSessionStore interface {
+	Set(ctx context.Context, sessionID string, data interfaces.SessionData) error
+	Get(ctx context.Context, sessionID string) (interfaces.SessionData, bool, error)
+	Delete(ctx context.Context, sessionID string) error
+}
+
+type RedisSessionImpl struct {
 	Client *redis.Client
 	Ttl time.Duration
 }
 
-func NewRedisSessionStore() (*RedisSessionStore, error) {
+func NewRedisSessionStore() (*RedisSessionImpl, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 		Password: "",
@@ -28,13 +34,13 @@ func NewRedisSessionStore() (*RedisSessionStore, error) {
 		return nil, err
 	}
 
-	return &RedisSessionStore{
+	return &RedisSessionImpl{
 		Client: rdb,
 		Ttl: 30*time.Minute,
 	}, nil
 }
 
-func (r *RedisSessionStore) Set(ctx context.Context, sessionID string, data interfaces.SessionData) error {
+func (r *RedisSessionImpl) Set(ctx context.Context, sessionID string, data interfaces.SessionData) error {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -43,8 +49,8 @@ func (r *RedisSessionStore) Set(ctx context.Context, sessionID string, data inte
 	return r.Client.Set(ctx, "session:"+sessionID, jsonData, r.Ttl).Err()
 }
 
-func (r *RedisSessionStore) Get(ctx context.Context, sessionID string) (interfaces.SessionData, bool, error){
-	result, err := r.Client.Get(ctx, "session:"+sessionID).Result()
+func (r *RedisSessionImpl) Get(ctx context.Context, sessionID string) (interfaces.SessionData, bool, error) {
+	result, err := r.Client.Get(ctx, "session"+sessionID).Result()
 	if err == redis.Nil {
 		return interfaces.SessionData{}, false, nil
 	} else if err != nil {
@@ -59,6 +65,6 @@ func (r *RedisSessionStore) Get(ctx context.Context, sessionID string) (interfac
 	return data, true, nil
 }
 
-func (r *RedisSessionStore) Delete(ctx context.Context, sessionID string) error {
+func (r *RedisSessionImpl) Delete(ctx context.Context, sessionID string) error {
 	return r.Client.Del(ctx, "session:"+sessionID).Err()
 }

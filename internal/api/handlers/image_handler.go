@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/dylan0804/image-processing-tool/internal/api/imaging"
@@ -19,11 +20,11 @@ import (
 )
 type ImageHandler struct {
 	response *response.Response
-	sessionStore *storage.RedisSessionStore
-	imaging *imaging.Imaging
+	sessionStore storage.RedisSessionStore
+	imaging imaging.Imaging
 }
 
-func NewImageHandler(response *response.Response, sessionStore *storage.RedisSessionStore, imaging *imaging.Imaging) *ImageHandler {
+func NewImageHandler(response *response.Response, sessionStore storage.RedisSessionStore, imaging imaging.Imaging) *ImageHandler {
 	return &ImageHandler{
 		response: response,
 		sessionStore: sessionStore,
@@ -116,7 +117,14 @@ func (i *ImageHandler) BlurImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blurredImg := i.imaging.Blur(img, 10)
+	sigmaInt, err := strconv.Atoi(blurImageRequest.Sigma)
+	if err != nil {
+		logger.Error("Failed to convert sigma to int", zap.Error(err))
+		i.response.WriteError(w, "iled to convert sigma to int", http.StatusInternalServerError)
+		return
+	}	
+
+	blurredImg := i.imaging.Blur(img, float64(sigmaInt))
 
 	tempDir := os.TempDir()
 	tempPath := filepath.Join(tempDir, uuid.New().String()+filepath.Ext(session.OriginalFilename))
@@ -128,28 +136,28 @@ func (i *ImageHandler) BlurImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = i.sessionStore.Set(r.Context(), blurImageRequest.SessionID, interfaces.SessionData{
-		OriginalFilename: session.OriginalFilename,
-		TempPath: tempPath,
-		UploadTime: time.Now(),
-	})
+	oldTempPath := session.TempPath
+	session.TempPath = tempPath
+
+	err = i.sessionStore.Set(r.Context(), blurImageRequest.SessionID, session)
 	if err != nil {
 		logger.Error("Failed to update session", zap.Error(err))
 		i.response.WriteError(w, "Failed to update session", http.StatusInternalServerError)
 		return
 	}
 
-	if session.TempPath != "" {
-		os.Remove(session.TempPath)
+	// clean up
+	if oldTempPath != "" && tempPath != oldTempPath {
+		os.Remove(oldTempPath)
 	}
 
 	i.response.WriteSuccess(w, &response.BaseResponse{
 		Success: true,
 		Data: map[string]interface{}{
-			"sessionID": blurImageRequest.SessionID,
+			"sessionId": blurImageRequest.SessionID,
 			"path": tempPath,
 			"operation": "blur",
-			"sigma": 10,
+			"sigma": blurImageRequest.Sigma,
 		},
 		Err: nil,
 	})

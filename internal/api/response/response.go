@@ -25,5 +25,14 @@ func (r *Response) WriteSuccess(w http.ResponseWriter, data *BaseResponse) {
 }
 
 func (r *Response) WriteError(w http.ResponseWriter, errMsg string, code int) {
-	http.Error(w, errMsg, code)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+
+	resp := &BaseResponse{
+		Success: false,
+		Data: errMsg,
+		Err: nil,
+	}
+
+	json.NewEncoder(w).Encode(&resp)
 }
