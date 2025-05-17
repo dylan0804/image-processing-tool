@@ -28,7 +28,7 @@ The system consists of several key components:
 
 ## Prerequisites
 
-*   **Go:** Version 1.23 or higher (for building the application).
+*   **Go:** Version 1.24 or higher (for building the application).
 *   **Docker:** For building container images and running locally with Docker Compose.
 *   **Docker Compose:** (Optional, for easy local development of all services).
 *   **Minikube:** For running a local Kubernetes cluster.
