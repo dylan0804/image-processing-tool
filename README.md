@@ -126,5 +126,5 @@ Follow these steps to deploy the application and its services to a Minikube clus
 *   `make test`: Runs Go tests.
 *   `make build`: Builds the Docker image for the API, tagged with `$(VERSION)`.
 *   `make load-to-minikube`: Loads the versioned Docker image into Minikube (depends on `build`).
-*   `make deploy`: Deploys core application and service resources to Kubernetes (depends on `load-to-minikube`). *Does not deploy Filebeat logging stack automatically yet.*
+*   `make deploy`: Deploys core application and service resources to Kubernetes (depends on `load-to-minikube`).
 *   `make verify`: Checks the status of all resources in the `image-processing-tool` namespace.
