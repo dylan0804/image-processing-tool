@@ -19,6 +19,7 @@ func main() {
 		panic("Failed to init logger: " + err.Error())
 	}
 	defer logger.Sync()
+
 	// set up redis
 	sessionStore, err := storage.NewRedisSessionStore()
 	if err != nil {

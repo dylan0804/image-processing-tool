@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// ====
 type mockSessionStore struct {
 	store map[string]interfaces.SessionData
 }
@@ -68,10 +69,13 @@ func (m *mockImaging) Open(path string) (image.Image, error) {
 func (m *mockImaging) Blur(img image.Image, sigma float64) *image.NRGBA {
 	return imaging.Blur(m.src, sigma)
 }
-
-func (m *mockImaging) Save(img *image.NRGBA, path string) error {
+func (m *mockImaging) Save(img image.Image, path string) error {
 	return nil
 }
+func (m *mockImaging) Sharpen(image image.Image, sigma float64) image.Image {
+	return m.src
+}
+// =========
 
 func TestImageHandler_UploadImage(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "image-test-*")
@@ -246,6 +250,85 @@ func TestImageHandler_BlurImage(t *testing.T) {
 			req = req.WithContext(ctx)
 
 			handler.BlurImage(rec, req)
+
+			tc.checkResponse(rec)
+		})
+	}
+}
+
+func TestImageHandler_SharpenImage(t *testing.T) {
+	mockStore := newMockSessionStore()
+	respHelper := response.NewResponse()
+	mockImaging := newMockImaging()
+
+	handler := NewImageHandler(respHelper, mockStore, mockImaging)
+
+	testcases := []struct{
+		name string
+		setupRequest func() (*http.Request, error)
+		checkResponse func(*httptest.ResponseRecorder)
+	}{
+		{
+			name: "Successfully sharpen image",
+			setupRequest: func() (*http.Request, error) {
+				// setup json body
+				sharpenImgReq := &request.SharpenImageRequest{
+					SessionID: "session-imageId",
+					Sigma: "42",
+				}
+
+				jsonBytes, err := json.Marshal(sharpenImgReq)
+				assert.NoError(t, err)
+
+				req, err := http.NewRequest("POST", "/sharpen", bytes.NewBuffer(jsonBytes))
+				assert.NoError(t, err)	
+			
+				req.Header.Set("Content-Type", "application/json")
+				return req, nil
+			},
+			checkResponse: func(rec *httptest.ResponseRecorder) {
+				var response response.BaseResponse
+
+				err := json.NewDecoder(rec.Body).Decode(&response)
+				assert.NoError(t, err)
+
+				data, ok := response.Data.(map[string]interface{})
+				assert.True(t, ok)
+
+				sessionId, ok := data["sessionId"].(string)
+				assert.True(t, ok)
+				assert.NotEmpty(t, sessionId)
+
+				path, ok := data["path"].(string)
+				assert.True(t, ok)
+				assert.NotEmpty(t, path)
+
+				operation, ok := data["operation"].(string)
+				assert.True(t, ok)
+				assert.Equal(t, "sharpen", operation)
+
+				_, exists, err := mockStore.Get(context.Background(), sessionId)
+				assert.NoError(t, err)
+				assert.True(t, exists)
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := tc.setupRequest()
+			require.NoError(t, err)
+
+			ctx := req.Context()
+			req = req.WithContext(ctx)
+
+			rec := httptest.NewRecorder()
+
+			mockStore.Set(req.Context(), "session-imageId", interfaces.SessionData{
+				TempPath: "path/to/temp",
+			})
+
+			handler.SharpenImage(rec, req)
 
 			tc.checkResponse(rec)
 		})

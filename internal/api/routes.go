@@ -23,8 +23,15 @@ func NewRoutes(mux *http.ServeMux, i *handlers.ImageHandler, logger *zap.Logger)
 }
 
 func (r *Route) InitRoutes() {
+	r.mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
 	r.mux.HandleFunc("POST /api/v1/image/upload", r.imageHandler.UploadImage)
 	r.mux.HandleFunc("POST /api/v1/image/resize", r.imageHandler.BlurImage)
+	r.mux.HandleFunc("POST /api/v1/image/sharpen", r.imageHandler.SharpenImage)
 
 	handler := middleware.LoggingMiddleware(r.logger, r.mux)
 

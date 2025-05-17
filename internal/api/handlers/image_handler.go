@@ -120,7 +120,7 @@ func (i *ImageHandler) BlurImage(w http.ResponseWriter, r *http.Request) {
 	sigmaInt, err := strconv.Atoi(blurImageRequest.Sigma)
 	if err != nil {
 		logger.Error("Failed to convert sigma to int", zap.Error(err))
-		i.response.WriteError(w, "iled to convert sigma to int", http.StatusInternalServerError)
+		i.response.WriteError(w, "Failed to convert sigma to int", http.StatusInternalServerError)
 		return
 	}	
 
@@ -160,5 +160,83 @@ func (i *ImageHandler) BlurImage(w http.ResponseWriter, r *http.Request) {
 			"sigma": blurImageRequest.Sigma,
 		},
 		Err: nil,
+	})
+}
+
+func (i *ImageHandler) SharpenImage(w http.ResponseWriter, r *http.Request) {
+	logger := logger.LoggerFromContext(r.Context())
+
+	var req request.SharpenImageRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Error("Failed to decode request body", zap.Error(err))
+		i.response.WriteError(w, "Failed to decode request body", http.StatusBadRequest)
+		return
+	}
+
+	// check from redis
+	session, exists, err := i.sessionStore.Get(r.Context(), req.SessionID)
+	if err != nil || !exists {
+		logger.Error("Failed to get session ID", zap.Error(err))
+		i.response.WriteError(w, "Failed to get session ID", http.StatusBadRequest)
+		return
+	}
+
+	// if ok
+	// get image
+	img, err := i.imaging.Open(session.TempPath)
+	if err != nil {
+		logger.Error("Failed to open image", zap.Error(err))
+		i.response.WriteError(w, "Failed to open image", http.StatusBadRequest)
+		return
+	}
+
+	// convert sigma to int
+	sigmaInt, err := strconv.Atoi(req.Sigma)
+	if err != nil {
+		logger.Error("Failed to convert sigma to int", zap.Error(err))
+		i.response.WriteError(w, "Failed to convert sigma to int", http.StatusInternalServerError)
+		return
+	}	
+
+	// sharpen image
+	sharpenedImg := i.imaging.Sharpen(img, float64(sigmaInt))
+
+	// create a new tmp file
+	tempDir := os.TempDir()
+	tempPath := filepath.Join(tempDir, uuid.NewString()+filepath.Ext(session.OriginalFilename))
+
+	// save file
+	err = i.imaging.Save(sharpenedImg, tempPath)
+	if err != nil {
+		logger.Error("Failed to save sharpened image", zap.Error(err))
+		i.response.WriteError(w, "Failed to save sharpened image", http.StatusInternalServerError)
+		return
+	}
+
+	// delete the old one
+	oldTempPath := session.TempPath
+	session.TempPath = tempPath
+
+	err = i.sessionStore.Set(r.Context(), req.SessionID, session)
+	if err != nil {
+		logger.Error("Failed to update session", zap.Error(err))
+		i.response.WriteError(w, "Failed to update session", http.StatusInternalServerError)
+		return
+	}
+
+	if oldTempPath != "" && oldTempPath != tempPath {
+		os.Remove(oldTempPath)
+	}
+
+	// return
+	i.response.WriteSuccess(w, &response.BaseResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"sessionId": req.SessionID,
+			"path": tempPath,
+			"operation": "sharpen",
+			"sigma": req.Sigma,
+		},
 	})
 }
